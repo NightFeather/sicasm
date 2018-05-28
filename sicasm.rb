@@ -28,6 +28,7 @@ require 'json'
 
 module SICXE
     DIRECTIVES = %w{ START END RESW RESB BYTE WORD }
+    ERRORS = JSON.parse(File.read('messages.json'))
     OPCODE = JSON.parse(File.read('opcodes.json'))
     REGISTERS = {
       "A"  => 0,
@@ -40,6 +41,10 @@ module SICXE
       "PC" => 8,
       "SW" => 9
     }
+
+  def self.errno id
+    ERRORS[id]
+  end
 
   def self.opcode op
     OPCODE[op.upcase]
@@ -210,3 +215,6 @@ module SICXE
   end
 end
 
+if File.expand_path(__FILE__) == File.expand_path($0)
+  SICXE::Assembler.new(ARGV[0]).pass1
+end
