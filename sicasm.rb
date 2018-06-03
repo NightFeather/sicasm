@@ -337,7 +337,9 @@ module SICXE
       @file.each_line do |line|
         @linecnt += 1
         next if line.strip.empty? || line =~ /^\s*$/  # empty line still count as a line
-        @list << parse(line)
+        res = parse line
+        @list << res
+        break if res.operator == "END"
         rescue SICXE::Error => e
           @has_error = true
           puts "error at line ##{e.lineno}: #{SICXE.errno(e.errno)["message"]}"
