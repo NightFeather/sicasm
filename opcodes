@@ -2,7 +2,7 @@ ADD m          3/4     18
 ADDF m         3/4     58
 ADDR r1,r2      2      90
 AND m          3/4     40
-CLEAR r1        2       4
+CLEAR r1        2      B4
 COMP m         3/4     28
 COMPF m        3/4     88
 COMPR r1,r2     2      A0
