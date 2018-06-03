@@ -109,12 +109,10 @@ module SICXE
     end
 
     def parse_format
-      @flags << :xe if opdata["sicxe"]
       if @operator[0] == '+'
         if opdata["formats"].include? 4
           format = 4
           @flags << :extend
-          #@operator = @operator.delete '+'
         else
           raise "invalid extend flag for operator \"#{ @operator }\""
         end
@@ -175,12 +173,39 @@ module SICXE
     def assemble v=nil
       output =  []
       output[0] = opdata["code"]
+      capacity = 2**11
+
+      if size == 3 || size == 4
+        value = (@operands and @operands[0] and @operands[0][:type] == :integer) ? @operands[0][:value] : 0
+
+        if not (@flags & [ :extend, :base, :pc ]).empty? # test for xe flags
+          output[0] |= 3
+          @flags << :xe
+        elsif ((-capacity)..(capacity-1)).include?(value - (offset + size)) # test for size
+        end
+
+        if @flags.include? :xe
+          unless (@flags.include? :immediate or @flags.include? :indirect) and @flags.include? :idx
+            if ((-capacity)..(capacity-1)).include? (value - (offset + size))
+
+              @flags << :pc
+              value = value - (offset + size)
+              value = 2*capacity + value if value < 0
+
+            end
+          end
+        end
+      end
+
+      if @flags.include? :xe
+        capacity = (@flags.include? :extend) ? 2**19 : 2**11
+      end
 
       if @flags.include? :immediate
         output[0] |= 1
       elsif @flags.include? :indirect
         output[0] |= 2
-      elsif not ((@flags - [:xe, :idx]).empty?)
+      elsif @flags.include? :xe
         output[0] |= 3
       end
 
@@ -191,14 +216,12 @@ module SICXE
         output[1] |= SICXE.register(@operands[1][:value]) || 0 if @operands[1]
         output[1] = "%02X" % output[1]
       when 3
-        value = (@operands and @operands[0] and @operands[0][:type] != :symbol) ? @operands[0][:value] : 0
         value |= 0x1000 if @flags.include? :extend
         value |= 0x2000 if @flags.include? :pc
         value |= 0x4000 if @flags.include? :base
         value |= 0x8000 if @flags.include? :idx
         output[1] = "%04X" % (value)
       when 4
-        value = (@operands and @operands[0] and @operands[0][:type] != :symbol) ? @operands[0][:value] : 0
         value |= 0x100000 if @flags.include? :extend
         value |= 0x200000 if @flags.include? :pc
         value |= 0x400000 if @flags.include? :base
