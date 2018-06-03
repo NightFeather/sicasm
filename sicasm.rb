@@ -79,7 +79,14 @@ module SICXE
 
     def to_s
       #"%d: (%d) %s %s ;%s" % [ @lineno, size, @operator, @operands, comment ]
-      "%04X %8s %-9s %-8s %-18s %s" % [ @offset, assemble, @label, @operator, @arg, @comment ]
+      "%04X %8s %-9s %-8s %-18s %s" % [
+        @offset,
+        assemble,
+        @label,
+        @operator,
+        @arg,
+        @comment
+      ]
     end
 
     def assemble
@@ -168,8 +175,15 @@ module SICXE
     def assemble v=nil
       output =  []
       output[0] = opdata["code"]
-      output[0] |= 1 if @flags.include? :immediate
-      output[0] |= 2 if @flags.include? :indirect
+
+      if @flags.include? :immediate
+        output[0] |= 1
+      elsif @flags.include? :indirect
+        output[0] |= 2
+      elsif not ((@flags - [:xe, :idx]).empty?)
+        output[0] |= 3
+      end
+
       output[0] = "%02X" % output[0]
       case size
       when 2
