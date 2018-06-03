@@ -90,30 +90,31 @@ module SICXE
   end
 
   class Instruction < Statement
-    attr_reader :size, :flags, :valid, :error
+    attr_reader :size, :flags, :valid, :error, :opdata
     def initialize **args
       super(**args)
       @flags = []
       @valid = false
+      @opdata = SICXE.opcode(@operator.delete('+'))
       parse_format
       parse_arg
       validate
     end
 
     def parse_format
-      op = SICXE.opcode(@operator.delete('+'))
+      @flags << :xe if opdata["sicxe"]
       if @operator[0] == '+'
-        if op["formats"].include? 4
+        if opdata["formats"].include? 4
           format = 4
           @flags << :extend
-          @operator = @operator.delete '+'
+          #@operator = @operator.delete '+'
         else
           raise "invalid extend flag for operator \"#{ @operator }\""
         end
-      elsif op["formats"].length > 1
+      elsif opdata["formats"].length > 1
         format ||= 3
       else
-        format = op["formats"][0]
+        format = opdata["formats"][0]
       end
       @size = format
     end
@@ -151,23 +152,22 @@ module SICXE
     end
 
     def validate
-      op = SICXE.opcode @operator.upcase
-      if op["args"].empty? and (@operands.nil? or @operands.empty?)
+      if opdata["args"].empty? and (@operands.nil? or @operands.empty?)
         @valid = true
-      elsif @operands and op["args"].length == @operands.length
-        @valid = op["args"].zip(@operands.map { |o| o[:type] }).map do |arg, opt|
+      elsif @operands and opdata["args"].length == @operands.length
+        @valid = opdata["args"].zip(@operands.map { |o| o[:type] }).map do |arg, opt|
           arg and opt and arg == "general" or arg == opt.to_s
         end.reduce(&:&)
-        @error = "mismatched operand type, expected #{op["args"]} <-> got #{@operands}" unless @valid
+        @error = "mismatched operand type, expected #{opdata["args"]} <-> got #{@operands}" unless @valid
       else
         @valid = false
-        @error = "mismatched number of operand, expected #{op["args"].count} got #{@operands.length}" unless @valid
+        @error = "mismatched number of operand, expected #{opdata["args"].count} got #{@operands.length}" unless @valid
       end
     end
 
     def assemble v=nil
       output =  []
-      output[0] = SICXE.opcode(@operator)["code"]
+      output[0] = opdata["code"]
       output[0] |= 1 if @flags.include? :immediate
       output[0] |= 2 if @flags.include? :indirect
       output[0] = "%02X" % output[0]
