@@ -266,15 +266,19 @@ module SICXE
         @size = @offset
         @operands = { type: :integer, value: @operands.to_i(16) }
       when 'RESW'
+        raise Error.new @linecnt, 14 if @operands.empty?
         @size = @operands.to_i * 3
         @operands = parse_literal @operands
       when 'RESB'
+        raise Error.new @linecnt, 12 if @operands.empty?
         @size = @operands.to_i
         @operands = parse_literal @operands
       when 'BYTE'
+        raise Error.new @linecnt, 10 if @operands.empty?
         @size = 1
         @operands = parse_literal @operands
       when 'WORD'
+        raise Error.new @linecnt, 11 if @operands.empty?
         @size = 3
         @operands = parse_literal @operands
       when 'END'
@@ -290,10 +294,10 @@ module SICXE
       when /^\d+$/
         type = :integer
         data = lit.to_i
-      when /^[0-9a-f]h$/i
+      when /^[0-9a-f]+h$/i
         type = :integer
         data = lit.to_i 16
-      when /^0x[0-9A-Fa-f]$/
+      when /^0x[0-9A-Fa-f]+$/
         type = :integer
         data = lit.to_i 16
       when /^C'(.+)'$/i
@@ -365,20 +369,31 @@ module SICXE
       @membase = 0
       @memcnt = 0
 
+      @end = false
       @has_error = false
     end
 
     def pass1
       puts "pass1 start."
-      @file.each_line do |line|
+      loop do
+        break if @file.eof?
+        line = @file.readline
         @linecnt += 1
         next if line.strip.empty? || line =~ /^\s*$/  # empty line still count as a line
-        res = parse line
-        @list << res
-        break if res.operator == "END"
+
+        begin
+          raise Error.new @linecnt, 44 if @end and not line =~ /^\s+\./
+          res = parse line
+          @list << res
+          if res.operator == "END"
+            @end = true
+            raise Error.new @linecnt, 5 unless @symtab.key? res.operands[0][:value]
+          end
         rescue SICXE::Error => e
           @has_error = true
           puts "error at line ##{e.lineno}: #{SICXE.errno(e.errno)["message"]}"
+        end
+
       end
       puts "pass1 end."
     end
@@ -460,7 +475,7 @@ module SICXE
       elsif SICXE.directive operator
         return directive tokens, operator: operator, label: label
       else
-        raise "Unknown operator \"#{ operator }\""
+        raise Error.new @linecnt, 16
       end
     end
 
