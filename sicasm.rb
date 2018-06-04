@@ -109,12 +109,10 @@ module SICXE
     end
 
     def parse_format
-      @flags << :xe if opdata["sicxe"]
       if @operator[0] == '+'
         if opdata["formats"].include? 4
           format = 4
           @flags << :extend
-          #@operator = @operator.delete '+'
         else
           raise "invalid extend flag for operator \"#{ @operator }\""
         end
@@ -168,19 +166,56 @@ module SICXE
         @error = "mismatched operand type, expected #{opdata["args"]} <-> got #{@operands}" unless @valid
       else
         @valid = false
-        @error = "mismatched number of operand, expected #{opdata["args"].count} got #{@operands.length}" unless @valid
+        @error = "mismatched number of operand, expected #{opdata["args"].count} got #{@operands.length}"
       end
+
+      if (@flags & [ :immediate, :indirect, :idx ]).length > 1
+        @valid = false
+        @error = "index cannot coexist with indirect or immediate addressing mode."
+      end
+
     end
 
     def assemble v=nil
       output =  []
       output[0] = opdata["code"]
+      capacity = 2**11
+
+      if size == 3 || size == 4
+        value = (@operands and @operands[0] and @operands[0][:type] == :integer) ? @operands[0][:value] : 0
+
+        if size == 3
+          if value >= 2**12
+            if ((-2**11)..(2**11-1)).include? (value - (offset + size))
+              @flags << :xe
+              @flags << :pc
+              value -= offset+size
+            elsif value >= 2**15
+              raise Error.new @linecnt, 62
+            end
+          else
+            value -= offset+size
+            @flags << :xe
+            @flags << :pc
+          end
+        elsif size == 4
+          if value >= 2**20
+            raise Error.new @linecnt, 62
+          elsif ((-2**19)..(2**19-1)).include? (value - (offset + size))
+            @flags << :xe
+            @flags << :pc
+            value -= offset+size
+          else
+            @flags << :xe
+          end
+        end
+      end
 
       if @flags.include? :immediate
         output[0] |= 1
       elsif @flags.include? :indirect
         output[0] |= 2
-      elsif not ((@flags - [:xe, :idx]).empty?)
+      elsif @flags.include? :xe
         output[0] |= 3
       end
 
@@ -191,17 +226,17 @@ module SICXE
         output[1] |= SICXE.register(@operands[1][:value]) || 0 if @operands[1]
         output[1] = "%02X" % output[1]
       when 3
-        value = (@operands and @operands[0] and @operands[0][:type] != :symbol) ? @operands[0][:value] : 0
-        value |= 0x1000 if @flags.include? :extend
-        value |= 0x2000 if @flags.include? :pc
-        value |= 0x4000 if @flags.include? :base
+        value += 2**12 if value < 0
+        value |= 0x1000 if @flags.include? :xe and @flags.include? :extend
+        value |= 0x2000 if @flags.include? :xe and @flags.include? :pc
+        value |= 0x4000 if @flags.include? :xe and @flags.include? :base
         value |= 0x8000 if @flags.include? :idx
         output[1] = "%04X" % (value)
       when 4
-        value = (@operands and @operands[0] and @operands[0][:type] != :symbol) ? @operands[0][:value] : 0
-        value |= 0x100000 if @flags.include? :extend
-        value |= 0x200000 if @flags.include? :pc
-        value |= 0x400000 if @flags.include? :base
+        value += 2**20 if value < 0
+        value |= 0x100000 if @flags.include? :xe and @flags.include? :extend
+        value |= 0x200000 if @flags.include? :xe and @flags.include? :pc
+        value |= 0x400000 if @flags.include? :xe and @flags.include? :base
         value |= 0x800000 if @flags.include? :idx
         output[1] = "%06X" % (value)
 
