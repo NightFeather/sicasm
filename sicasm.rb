@@ -179,21 +179,22 @@ module SICXE
     def assemble v=nil
       output =  []
       output[0] = opdata["code"]
-      capacity = 2**11
 
       if size == 3 || size == 4
         value = (@operands and @operands[0] and @operands[0][:type] == :integer) ? @operands[0][:value] : 0
 
         if size == 3
           if value >= 2**12
-            if ((-2**11)..(2**11-1)).include? (value - (offset + size))
+            if @flags.include? :immediate
+              raise Error.new @linecnt, 62
+            elsif ((-2**11)..(2**11-1)).include? (value - (offset + size))
               @flags << :xe
               @flags << :pc
               value -= offset+size
             elsif value >= 2**15
               raise Error.new @linecnt, 62
             end
-          else
+          elsif not @flags.include? :immediate
             value -= offset+size
             @flags << :xe
             @flags << :pc
@@ -201,7 +202,7 @@ module SICXE
         elsif size == 4
           if value >= 2**20
             raise Error.new @linecnt, 62
-          elsif ((-2**19)..(2**19-1)).include? (value - (offset + size))
+          elsif not @flags.include?(:immediate) and ((-2**19)..(2**19-1)).include? (value - (offset + size))
             @flags << :xe
             @flags << :pc
             value -= offset+size
